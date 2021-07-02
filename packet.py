@@ -19,7 +19,7 @@ def print_status(user_list):
     for key, val in user_list.items():
         print(f"- {key}")
         for _val in val:
-            _val = val.split(":")
+            _val = _val.split(":")
             print(f"    - Nick: {_val[0]}")
             print(f"    - BTag: {_val[1]}")
             print("")
@@ -51,6 +51,16 @@ def trace_room(device_interface):
             # skip host
             _key = packet.ip.src
             if _key.startswith("158.115."):
+                if (packet.udp.payload.startswith("08:01:12:") and
+                    packet.udp.payload[12:14] == "01"):
+                    
+                    payload = packet.udp.payload.replace(":", "")
+                    payload = binascii.unhexlify(payload).split(b",")
+                    
+                    # print(payload)
+                    # host = payload
+                    # host = host.split(b"\x00")[0]
+                    # print(host)
                 continue
 
             if packet.udp.dstport == "6112":
