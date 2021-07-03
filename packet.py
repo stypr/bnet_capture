@@ -10,12 +10,13 @@ import os
 import binascii
 import pyshark
 
-def print_status(user_list):
+def print_status(user_list, user_host):
     """ (dict) -> NoneType
 
     Display current status
     """
     os.system("cls")
+    print(f"지금 방장은 {user_host} 입니다.\n")
     for key, val in user_list.items():
         print(f"- {key}")
         for _val in val:
@@ -44,6 +45,7 @@ def trace_room(device_interface):
     Trace StarCraft room information
     """
     user_list = {}
+    user_host = None
     capture = pyshark.LiveCapture(interface=device_interface)
 
     for packet in capture.sniff_continuously():
@@ -56,11 +58,10 @@ def trace_room(device_interface):
                     
                     payload = packet.udp.payload.replace(":", "")
                     payload = binascii.unhexlify(payload).split(b",")
-                    
-                    # print(payload)
-                    # host = payload
-                    # host = host.split(b"\x00")[0]
-                    # print(host)
+                    # Remove all from the user list when a new packet arrives
+                    if len(payload) == 16:
+                        user_host = payload[11].split(b"\r")[0].decode()
+                        user_list = {}
                 continue
 
             if packet.udp.dstport == "6112":
@@ -78,7 +79,7 @@ def trace_room(device_interface):
                     else:
                         user_list[_key] = [_data]
 
-                    print_status(user_list)
+                    print_status(user_list, user_host)
 
         except AttributeError:
             # Not UDP
