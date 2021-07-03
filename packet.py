@@ -11,7 +11,7 @@ import binascii
 import pyshark
 
 def print_status(user_list, user_host):
-    """ (dict) -> NoneType
+    """ (dict, str) -> NoneType
 
     Display current status
     """
