@@ -1,3 +1,5 @@
+#!/usr/bin/python -u
+
 """
 packet.py
 
@@ -7,36 +9,29 @@ Broodwar IP capture, not stable.
 """
 
 import os
+import sys
+import locale
 import binascii
+import subprocess
 import pyshark
 
-def print_status(user_list, user_host):
-    """ (dict, str) -> NoneType
+def read_from(s, start):
+    """ (bytes, bytes) -> bytes
 
-    Display current status
+    Read from a given character.
+
+    >>> read_from(b"test12341", b"1")
+    2341
     """
-    os.system("cls")
-    print(f"지금 방장은 {user_host} 입니다.\n")
-    for key, val in user_list.items():
-        print(f"- {key}")
-        for _val in val:
-            _val = _val.split(":")
-            print(f"    - Nick: {_val[0]}")
-            print(f"    - BTag: {_val[1]}")
-            print("")
+    return start.join(s.split(start)[1:])
 
-def parse_info_packet(payload):
-    """ (bytes) -> list of str
+def read_until(s, until=b"\x00"):
+    """ (bytes) -> bytes
 
-    Parse info packet and get Battle Tag and Nickname
+    Read until a given character
     """
-    battle_tag = payload[0x1b:]
-    battle_tag = battle_tag.split(b"\x00")[0]
-    nickname = payload[0xe3:]
-    nickname = nickname.split(b"\x00")[0]
-    battle_tag = battle_tag.decode()
-    nickname = nickname.decode()
-    return (battle_tag, nickname)
+    return s.split(until)[0]
+
 
 def trace_room(device_interface):
     """ (str) -> NoneType
@@ -64,13 +59,40 @@ def trace_room(device_interface):
                         user_list = {}
                 continue
 
-            if packet.udp.dstport == "6112":
-                if packet.udp.payload.startswith("08:01:12:a6:03"):
-                    # unhexlify and parse
-                    payload = packet.udp.payload.replace(":", "")
-                    payload = binascii.unhexlify(payload)
-                    battle_tag, nickname = parse_info_packet(payload)
 
+            if packet.udp.dstport == "6112":
+                payload = packet.udp.payload.replace(":", "")
+                payload = binascii.unhexlify(payload)
+
+                # Magic Header
+                if payload.startswith(b"\x08\x01\x12"):
+                    _packet_header = payload[:0x15]
+                    _packet_content = payload[0x15:]
+                    _packet_header_type = payload[0x3]
+
+                    _packet_is_info = _packet_header_type == 0xa6
+                    _packet_is_chat = _packet_header[0x14] == 0x4c
+                    _packet_is_ping = _packet_header_type == 0x11
+
+
+                    # 유저 정보 파싱
+                    if _packet_is_info:
+                        # print(_packet_content)
+                        _packet_user = _packet_content[0x2]
+                        _packet_battle_tag = read_until(_packet_content[0x6:], b"\x00")
+                        _packet_nickname = read_from(read_from(_packet_content, _packet_battle_tag), b"??")
+                        _packet_nickname = read_until(_packet_nickname[0x62:], b"\x00")
+                        print("ID:", _packet_user, "/ BTag:", _packet_battle_tag.decode(), "/ Nickname:", _packet_nickname.decode())
+
+                    # 채팅 내용 파싱
+                    if _packet_is_chat:
+                        _packet_chat_user = payload[0x12]
+                        _packet_chat_content = read_until(_packet_content, b"\x00").decode()
+                        print("ID:", _packet_chat_user, "/ Data:", _packet_chat_content)
+
+                    # TODO: 퇴장내용파싱, 방장확인, 보내는 패킷 알아보기 (여러 서버로 보내는 것 같음.)
+
+                """
                     # insert info
                     _data = f"{nickname}:{battle_tag}"
                     if (user_list.get(_key) and
@@ -79,7 +101,8 @@ def trace_room(device_interface):
                     else:
                         user_list[_key] = [_data]
 
-                    print_status(user_list, user_host)
+                    # print_status(user_list, user_host)
+                """
 
         except AttributeError:
             # Not UDP
@@ -87,6 +110,12 @@ def trace_room(device_interface):
 
 if __name__ == "__main__":
     # Need NPF device ID for getting traffic
-    # `tshark -D`
+    # _encoding = locale.getpreferredencoding()
+    # cmd = ["C:\\Program Files\Wireshark\\tshark.exe", "-D"]
+    # p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    # p.wait()
+    # print(p.stdout.read().decode(_encoding).strip())
+    #  os.popen("")c
+    
     DEVICE_ID = "\\Device\\NPF_{8A1296EE-A0F9-49ED-877F-5E050B5629BB}"
     trace_room(DEVICE_ID)
